@@ -30,6 +30,7 @@ void setup(){
 }
 
 void loop(){
+ // parsing signal from reciever to multiwii
   thrServo.writeMicroseconds(pulseIn(thrPinRC, HIGH, 25000));
   armServo.writeMicroseconds(pulseIn(armPinRC, HIGH, 25000));
   yawServo.writeMicroseconds(pulseIn(yawPinRC, HIGH, 25000));
