@@ -1,10 +1,10 @@
-const int rcPin1 = 0;
-const int rcPin2 = 0;
-const int rcPin3 = 0;
-const int rcPin4 = 0;
-const int rcPin5 = 0;
+const int rcPin1 = 0;//?
+const int rcPin2 = 0;//?
+const int rcPin3 = 0;//?
+const int rcPin4 = 0;//?
+const int rcPin5 = 0;//?
 
-const int xBeePin = 0;
+const int xBeePin = 0;//?
 
 const int GROUNDED = 0;
 const int MANUAL = 1;
@@ -13,19 +13,26 @@ const int AUTO = 2;
 const int LAST = 0;
 const int CURRENT = 1;
 
-const long AUX_THRESHOLD = 2000;
-const int A
+const long AUX_THRESHOLD = 2000;//?
 
 int _mode;
 int _oldMode;
+
+struct State{
+  float Z;
+  float Yaw;
+  float Pitch;
+  float Roll;
+}
 
 void setup()
 {
   rcSetup();
   xBeeSetup();
+  sensorSetup();
   
-  mode = GROUNDED;
-  oldMode = GROUNDED;
+  _mode = GROUNDED;
+  _oldMode = GROUNDED;
 }
 
 void rcSetup()
@@ -39,6 +46,10 @@ void rcSetup()
 
 void xBeeSetup(){
   pinMode(xBeePin, INPUT);
+}
+
+void sensorSetup(){
+  
 }
 
 void loop()
@@ -66,15 +77,15 @@ void updateMode()
     
   long isAuto = digitalRead(xBeePin);
   
-  if (oldMode == GROUNDED){
-     if (auxThreshold <= aux){
+  if (_oldMode == GROUNDED){
+     if (AUX_THRESHOLD <= aux){
        _mode = MANUAL; 
      } else {
        _mode = GROUNDED;
      }
   }
-  else if (oldMode == MANUAL){
-    if (aux < AUX_THRESHOLD && throttle = 0){
+  else if (_oldMode == MANUAL){
+    if (aux < AUX_THRESHOLD && throttle == 0){
       _mode = GROUNDED;
     } else if (isAuto == HIGH) {
       _mode = AUTO;
@@ -93,6 +104,8 @@ int getMode(){
 void updateState(){
   
 }
+
+
 
 void groundedAct(){
   
