@@ -1,0 +1,13 @@
+s2 = serial('COM17','BaudRate',9600);
+fopen(s2);
+high='1';
+low='0';
+fwrite(s2,high);
+pause(2);
+fwrite(s2,low);
+pause(2);
+fwrite(s2,high);
+pause(2);
+fwrite(s2,low);
+fclose(s2);
+delete(s2);
