@@ -23,13 +23,16 @@ const long AUX_THRESHOLD = 2000;//?
 
 int _mode;
 int _oldMode;
+boolean _stateChanged;
 
 struct Inputs{
-  long rcPin1,
-  long rcPin2,
-  long rcPin3,
-  long rcPin4,
-  long rcPin5
+  long rcPin1;
+  long rcPin2;
+  long rcPin3;
+  long rcPin4;
+  long rcPin5;
+  char xBee;
+  boolean hasXBee;
 };
 
 Inputs _inputs;
@@ -45,12 +48,14 @@ State _state;
 
 void setup()
 {
+  Serial.begin(9600);
   rcSetup();
   xBeeSetup();
   sensorSetup();
   
   _mode = GROUNDED;
   _oldMode = GROUNDED;
+  _stateChanged = true;
 }
 
 void rcSetup()
@@ -72,6 +77,7 @@ void sensorSetup(){
 
 void loop()
 {
+  updateInputs
   updateMode();
   updateState();
   switch (getMode()){
@@ -90,27 +96,38 @@ void updateMode()
 {
   _oldMode = _mode;
   
-  long throttle = pulseIn(rcPin2, HIGH);
-  long aux = pulseIn(rcPin5, HIGH);
-    
-  long isAuto = digitalRead(xBeePin);
+  struct Inputs inputs = getInputs();
   
   if (_oldMode == GROUNDED){
-     if (AUX_THRESHOLD <= aux){
+     if (AUX_THRESHOLD <= inputs.rcPin5){
        _mode = MANUAL; 
      } else {
        _mode = GROUNDED;
      }
   }
   else if (_oldMode == MANUAL){
-    if (aux < AUX_THRESHOLD && throttle == 0){
+    if (inputs.rcPin5 < AUX_THRESHOLD && inputs.rcPin2 == 0){
       _mode = GROUNDED;
-    } else if (isAuto == HIGH) {
+    } else if (inputs.hasXBee && inputs.xBee == '1') {
       _mode = AUTO;
     } 
   } else { //AUTO
-    if (isAuto == LOW){
+    if (!inputs.hasXBee || inputs.xBee != '1'){
       _mode = MANUAL;
+    }
+  }
+  
+  if(_oldMode != _mode){
+    _stateChanged = true;
+    switch(_mode){
+      case GROUNDED:
+        sendDisarm();
+        break;
+      case MANUAL:
+        sendArm();
+        break;
+      default: //AUTO
+        sendAuto();
     }
   }
 }
@@ -123,20 +140,61 @@ void updateState(){
   
 }
 
-State getState(){
+struct State getState(){
   return _state;
 }
 
 void groundedAct(){
-  
+  if(_stateChanged){
+    Serial.println("grounded...");
+    _stateChanged = false;
+  }
 }
 
 void manualAct(){
-  
+  if(_stateChanged){
+    Serial.println("manual flying...");
+    _stateChanged = false;
+  }
 }
 
 void autoAct(){
-  
+  if(_stateChanged){
+    Serial.println("auto flying...");
+    _stateChanged = false;
+  }
 }
 
-void updateInputs()
+void updateInputs(){
+  _inputs.rcPin1 = pulseIn(rcPin1, HIGH);
+  _inputs.rcPin2 = pulseIn(rcPin2, HIGH);
+  _inputs.rcPin3 = pulseIn(rcPin3, HIGH);
+  _inputs.rcPin4 = pulseIn(rcPin4, HIGH);
+  _inputs.rcPin5 = pulseIn(rcPin5, HIGH);
+  
+  if (Serial.available() > 0){
+    _inputs.hasXBee = true;
+    _inputs.xBee = Serial.read();
+  }
+  else {
+    _inputs.hasXBee = false;
+  }  
+}
+
+struct Inputs getInputs(){
+  return _inputs;
+}
+
+void sendDisarm(){
+  Serial.println("disarming");
+}
+
+void sendArm(){
+  Serial.println("arming");
+}
+
+void sendAuto(){
+  Serial.println("auto"); 
+}
+
+
