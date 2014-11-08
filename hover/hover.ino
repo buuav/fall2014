@@ -1,3 +1,5 @@
+#include <Servo.h>
+
 const int rcPin1 = A0;
 const int rcPin2 = A1;
 const int rcPin3 = A2;
@@ -12,6 +14,12 @@ const int multiWiiPin3 = 9;
 const int multiWiiPin4 = 10;
 const int multiWiiPin5 = 11;
 
+Servo multiWiiThrottle;
+Servo multiWiiYaw;
+Servo multiWiiPitch;
+Servo multiWiiRoll;
+Servo multiWiiAux;
+
 const int GROUNDED = 0;
 const int MANUAL = 1;
 const int AUTO = 2;
@@ -19,7 +27,7 @@ const int AUTO = 2;
 const int LAST = 0;
 const int CURRENT = 1;
 
-const long AUX_THRESHOLD = 2000;//?
+const long AUX_THRESHOLD = 1700;
 
 int _mode;
 int _oldMode;
@@ -52,6 +60,7 @@ void setup()
   rcSetup();
   xBeeSetup();
   sensorSetup();
+  multiWiiSetup();
   
   _mode = GROUNDED;
   _oldMode = GROUNDED;
@@ -71,13 +80,30 @@ void xBeeSetup(){
   pinMode(xBeePin, INPUT);
 }
 
+void multiWiiSetup(){
+  multiWiiThrottle.attach(multiWiiPin1);
+  multiWiiThrottle.writeMicroseconds(1000);
+  
+  multiWiiYaw.attach(multiWiiPin4);
+  multiWiiYaw.writeMicroseconds(1500);
+  
+  multiWiiPitch.attach(multiWiiPin3);
+  multiWiiPitch.writeMicroseconds(1500);
+  
+  multiWiiRoll.attach(multiWiiPin2);
+  multiWiiRoll.writeMicroseconds(1500);
+  
+  multiWiiAux.attach(multiWiiPin5);
+  multiWiiAux.writeMicroseconds(0);
+}
+
 void sensorSetup(){
   
 }
 
 void loop()
 {
-  updateInputs
+  updateInputs();
   updateMode();
   updateState();
   switch (getMode()){
@@ -106,7 +132,7 @@ void updateMode()
      }
   }
   else if (_oldMode == MANUAL){
-    if (inputs.rcPin5 < AUX_THRESHOLD && inputs.rcPin2 == 0){
+    if (inputs.rcPin5 < AUX_THRESHOLD && inputs.rcPin2 <= 1100){
       _mode = GROUNDED;
     } else if (inputs.hasXBee && inputs.xBee == '1') {
       _mode = AUTO;
@@ -156,6 +182,12 @@ void manualAct(){
     Serial.println("manual flying...");
     _stateChanged = false;
   }
+  
+  multiWiiAux.writeMicroseconds(_inputs.rcPin5);
+  multiWiiThrottle.writeMicroseconds(_inputs.rcPin2);
+  multiWiiYaw.writeMicroseconds(inputs.rcPin1);
+  multiWiiPitch.writeMicroseconds(inputs.rcPin3);
+  multiWiiRoll.writeMicroseconds(inputs.rcPin4);
 }
 
 void autoAct(){
@@ -187,10 +219,22 @@ struct Inputs getInputs(){
 
 void sendDisarm(){
   Serial.println("disarming");
+  
+  struct Inputs inputs = getInputs();
+  multiWiiAux.writeMicroseconds(inputs.rcPin5);
+  multiWiiThrottle.writeMicroseconds(inputs.rcPin2);
 }
 
 void sendArm(){
   Serial.println("arming");
+
+  struct Inputs inputs = getInputs();
+  multiWiiAux.writeMicroseconds(inputs.rcPin5);
+  multiWiiThrottle.writeMicroseconds(inputs.rcPin2);
+  multiWiiYaw.writeMicroseconds(inputs.rcPin1);
+  multiWiiPitch.writeMicroseconds(inputs.rcPin3);
+  multiWiiRoll.writeMicroseconds(inputs.rcPin4);
+  
 }
 
 void sendAuto(){
