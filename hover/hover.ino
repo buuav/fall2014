@@ -183,8 +183,10 @@ void manualAct(){
     _stateChanged = false;
   }
   
-  multiWiiAux.writeMicroseconds(_inputs.rcPin5);
-  multiWiiThrottle.writeMicroseconds(_inputs.rcPin2);
+  struct Inputs inputs = getInputs();
+  
+  multiWiiAux.writeMicroseconds(inputs.rcPin5);
+  multiWiiThrottle.writeMicroseconds(inputs.rcPin2);
   multiWiiYaw.writeMicroseconds(inputs.rcPin1);
   multiWiiPitch.writeMicroseconds(inputs.rcPin3);
   multiWiiRoll.writeMicroseconds(inputs.rcPin4);
