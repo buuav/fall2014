@@ -1,3 +1,5 @@
+#include <PID_v1.h>
+
 #include <Servo.h>
 
 const int rcPin1 = A0;
@@ -21,7 +23,7 @@ Servo multiWiiRoll;
 Servo multiWiiAux;
 
 const int GROUNDED = 0;
-const int MANUAL = 1;
+const int MANUALMODE = 1;
 const int AUTO = 2;
 
 const int LAST = 0;
@@ -32,6 +34,12 @@ const long AUX_THRESHOLD = 1700;
 int _mode;
 int _oldMode;
 boolean _stateChanged;
+
+const int echoPin = A5, trigPin = 8;
+double dist = 0, setDist = 60, thrVal = 0;
+const int sampleTime = 500;  // Sample time in ms
+
+PID thrPID(&dist, &thrVal, &setDist, 2, 5, 1, DIRECT);
 
 struct Inputs{
   long rcPin1;
@@ -97,8 +105,15 @@ void multiWiiSetup(){
   multiWiiAux.writeMicroseconds(0);
 }
 
+
+
 void sensorSetup(){
-  
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  readSensor(&dist);
+  thrPID.SetOutputLimits(1000, 2000);
+  thrPID.SetMode(AUTOMATIC);
+  thrPID.SetSampleTime(sampleTime);
 }
 
 void loop()
@@ -110,8 +125,8 @@ void loop()
     case GROUNDED:
       groundedAct();
       break;
-    case MANUAL:
-      manualAct();
+    case MANUALMODE:
+      ManualAct();
       break;
     default: //AUTO
       autoAct();
@@ -126,20 +141,20 @@ void updateMode()
   
   if (_oldMode == GROUNDED){
      if (AUX_THRESHOLD <= inputs.rcPin5){
-       _mode = MANUAL; 
+       _mode = MANUALMODE; 
      } else {
        _mode = GROUNDED;
      }
   }
-  else if (_oldMode == MANUAL){
+  else if (_oldMode == MANUALMODE){
     if (inputs.rcPin5 < AUX_THRESHOLD && inputs.rcPin2 <= 1100){
       _mode = GROUNDED;
     } else if (inputs.hasXBee && inputs.xBee == '1') {
       _mode = AUTO;
     } 
   } else { //AUTO
-    if (!inputs.hasXBee || inputs.xBee != '1'){
-      _mode = MANUAL;
+    if (inputs.hasXBee && inputs.xBee == '0'){
+      _mode = MANUALMODE;
     }
   }
   
@@ -149,7 +164,7 @@ void updateMode()
       case GROUNDED:
         sendDisarm();
         break;
-      case MANUAL:
+      case MANUALMODE:
         sendArm();
         break;
       default: //AUTO
@@ -177,9 +192,9 @@ void groundedAct(){
   }
 }
 
-void manualAct(){
+void ManualAct(){
   if(_stateChanged){
-    Serial.println("manual flying...");
+    Serial.println("MANUALMODE flying...");
     _stateChanged = false;
   }
   
@@ -197,6 +212,13 @@ void autoAct(){
     Serial.println("auto flying...");
     _stateChanged = false;
   }
+  
+  readSensor(&dist);
+  thrPID.Compute();
+  Serial.print("dist:");Serial.print(dist);Serial.print("\t");
+  Serial.print("setDist:");Serial.print(setDist);Serial.print("\t");
+  Serial.print("thrVal:");Serial.println(thrVal); 
+  delay(sampleTime);
 }
 
 void updateInputs(){
@@ -242,5 +264,38 @@ void sendArm(){
 void sendAuto(){
   Serial.println("auto"); 
 }
+
+  long readSensor(double *dist){
+  int numReadings = 2;
+  long distSum = 0;
+  for(int i=0; i<numReadings; i++){
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  *dist = pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
+  *dist = smooth(pulseIn(echoPin, HIGH, 25000)/29/2, 0.6, *dist);
+  distSum += pulseIn(echoPin, HIGH, 25000) / 29 / 2;
+  }
+  *dist = constrain(distSum / numReadings, 0, 150);
+}
+
+
+int smooth(int data, float filterVal, float smoothedVal){
+
+
+  if (filterVal > 1){      // check to make sure param's are within range
+    filterVal = .99;
+  }
+  else if (filterVal <= 0){
+    filterVal = 0;
+  }
+
+  smoothedVal = (data * (1 - filterVal)) + (smoothedVal  *  filterVal);
+
+  return (int)smoothedVal;
+}
+
 
 
