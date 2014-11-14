@@ -39,7 +39,7 @@ const int echoPin = A5, trigPin = 8;
 double dist = 0, setDist = 60, thrVal = 0;
 const int sampleTime = 500;  // Sample time in ms
 
-PID thrPID(&dist, &thrVal, &setDist, 3, 0.5, 8, DIRECT);
+PID thrPID(&dist, &thrVal, &setDist, 0.349, 0.0003062, 1, DIRECT);
 
 struct Inputs{
   long rcPin1;
@@ -112,7 +112,6 @@ void sensorSetup(){
   pinMode(echoPin, INPUT);
   readSensor(&dist);
   thrPID.SetOutputLimits(1250, 1750);
-  thrPID.SetMode(AUTOMATIC);
   thrPID.SetSampleTime(sampleTime);
 }
 
@@ -253,6 +252,7 @@ void sendDisarm(){
   struct Inputs inputs = getInputs();
   multiWiiAux.writeMicroseconds(inputs.rcPin5);
   multiWiiThrottle.writeMicroseconds(inputs.rcPin2);
+  thrPID.SetMode(MANUAL);
 }
 
 void sendArm(){
@@ -266,10 +266,12 @@ void sendArm(){
   multiWiiRoll.writeMicroseconds(inputs.rcPin4);
   
   dist = setDist;
+  thrPID.SetMode(MANUAL);
 }
 
 void sendAuto(){
-  Serial.println("auto"); 
+  Serial.println("auto");
+  thrPID.SetMode(AUTOMATIC); 
 }
 
 long readSensor(double *dist){
