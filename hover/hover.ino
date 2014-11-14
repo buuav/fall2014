@@ -113,6 +113,7 @@ void sensorSetup(){
   readSensor(&dist);
   thrPID.SetOutputLimits(1250, 1750);
   thrPID.SetSampleTime(sampleTime);
+  thrPID.SetMode(MANUAL);
 }
 
 void loop()
@@ -130,6 +131,7 @@ void loop()
     default: //AUTO
       autoAct();
   }
+  Serial.println(getMode());
 }
 
 void updateMode()
