@@ -39,7 +39,7 @@ const int echoPin = A5, trigPin = 8;
 double dist = 0, setDist = 60, thrVal = 0;
 const int sampleTime = 500;  // Sample time in ms
 
-PID thrPID(&dist, &thrVal, &setDist, 2, 5, 1, DIRECT);
+PID thrPID(&dist, &thrVal, &setDist, 3, 0.5, 8, DIRECT);
 
 struct Inputs{
   long rcPin1;
@@ -111,7 +111,7 @@ void sensorSetup(){
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
   readSensor(&dist);
-  thrPID.SetOutputLimits(1000, 2000);
+  thrPID.SetOutputLimits(1250, 1750);
   thrPID.SetMode(AUTOMATIC);
   thrPID.SetSampleTime(sampleTime);
 }
@@ -212,6 +212,7 @@ void autoAct(){
     Serial.println("auto flying...");
     _stateChanged = false;
   }
+  struct Inputs inputs = getInputs();
   
   readSensor(&dist);
   thrPID.Compute();
@@ -219,6 +220,11 @@ void autoAct(){
   Serial.print("setDist:");Serial.print(setDist);Serial.print("\t");
   Serial.print("thrVal:");Serial.println(thrVal); 
   delay(sampleTime);
+  multiWiiThrottle.writeMicroseconds(thrVal);
+  multiWiiYaw.writeMicroseconds(inputs.rcPin1);
+  multiWiiPitch.writeMicroseconds(inputs.rcPin3);
+  multiWiiRoll.writeMicroseconds(inputs.rcPin4);
+  
 }
 
 void updateInputs(){
@@ -259,26 +265,28 @@ void sendArm(){
   multiWiiPitch.writeMicroseconds(inputs.rcPin3);
   multiWiiRoll.writeMicroseconds(inputs.rcPin4);
   
+  dist = setDist;
 }
 
 void sendAuto(){
   Serial.println("auto"); 
 }
 
-  long readSensor(double *dist){
-  int numReadings = 2;
+long readSensor(double *dist){
+  double numReadings = 2.0;
   long distSum = 0;
   for(int i=0; i<numReadings; i++){
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  *dist = pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
-  *dist = smooth(pulseIn(echoPin, HIGH, 25000)/29/2, 0.6, *dist);
-  distSum += pulseIn(echoPin, HIGH, 25000) / 29 / 2;
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+    *dist = pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
+    *dist = smooth(pulseIn(echoPin, HIGH, 25000)/29/2, 0.6, *dist);
+    distSum += pulseIn(echoPin, HIGH, 25000) / 29 / 2;
   }
-  *dist = constrain(distSum / numReadings, 0, 150);
+  Serial.print("dist:");Serial.println((double)*dist);
+  //*dist = constrain(distSum / numReadings, 0, 150);
 }
 
 

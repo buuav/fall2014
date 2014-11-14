@@ -28,16 +28,16 @@ long readSensor(double *dist){
   int numReadings = 2;
   long distSum = 0;
   for(int i=0; i<numReadings; i++){
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  *dist = pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
-  *dist = smooth(pulseIn(echoPin, HIGH, 25000)/29/2, 0.6, *dist);
-  distSum += pulseIn(echoPin, HIGH, 25000) / 29 / 2;
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+    *dist = pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
+    *dist = smooth(pulseIn(echoPin, HIGH, 25000)/29/2, 0.6, *dist);
+    distSum += pulseIn(echoPin, HIGH, 25000) / 29 / 2;
   }
-  Serial.print("dist:");Serial.print(dist);Serial.print("\t");
+  Serial.print("dist:");Serial.print((double)*dist);Serial.print("\t");
   Serial.print("setDist:");Serial.print(setDist);Serial.print("\t");
   Serial.print("thrVal:");Serial.println(thrVal);
   *dist = constrain(distSum / numReadings, 0, 150);
