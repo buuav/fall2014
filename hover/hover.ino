@@ -1,313 +1,98 @@
 #include <PID_v1.h>
-
 #include <Servo.h>
 
-const int rcPin1 = A0;
-const int rcPin2 = A1;
-const int rcPin3 = A2;
-const int rcPin4 = A3;
-const int rcPin5 = A4;
-
-const int xBeePin = 0;
-
-const int multiWiiPin1 = 5;
-const int multiWiiPin2 = 6;
-const int multiWiiPin3 = 9;
-const int multiWiiPin4 = 10;
-const int multiWiiPin5 = 11;
-
-Servo multiWiiThrottle;
-Servo multiWiiYaw;
-Servo multiWiiPitch;
-Servo multiWiiRoll;
-Servo multiWiiAux;
-
-const int GROUNDED = 0;
-const int MANUALMODE = 1;
-const int AUTO = 2;
-
-const int LAST = 0;
-const int CURRENT = 1;
-
-const long AUX_THRESHOLD = 1700;
-
-int _mode;
-int _oldMode;
-boolean _stateChanged;
-
+const int rcPin[5] = {A0, A1, A2, A3, A4};
 const int echoPin = A5, trigPin = 8;
-double dist = 0, setDist = 60, thrVal = 0;
-const int sampleTime = 500;  // Sample time in ms
+const int wiiPin[5] = {5, 6, 9, 10, 11};
 
-PID thrPID(&dist, &thrVal, &setDist, 0.349, 0.0003062, 1, DIRECT);
+Servo wiiThrottle, wiiYaw, wiiPitch, wiiRoll, wiiAux;
 
-struct Inputs{
-  long rcPin1;
-  long rcPin2;
-  long rcPin3;
-  long rcPin4;
-  long rcPin5;
-  char xBee;
-  boolean hasXBee;
-};
+bool isAuto = false;
+double dist, setDist, thrVal;
+const int sampleTime = 20, serialPrintDelay = 200;    // Sample time in ms
+unsigned long lastPrintTime = 0;
 
-Inputs _inputs;
+PID thrPID(&dist, &thrVal, &setDist, 4, 1, 1.5, DIRECT);
 
-struct State{
-  float Z;
-  float Yaw;
-  float Pitch;
-  float Roll;
-};
-
-State _state;
-
-void setup()
-{
-  Serial.begin(9600);
-  rcSetup();
-  xBeeSetup();
-  sensorSetup();
-  multiWiiSetup();
-  
-  _mode = GROUNDED;
-  _oldMode = GROUNDED;
-  _stateChanged = true;
+void setup(){
+    Serial.begin(9600);
+    pinsSetup();
+    PIDSetup();
+    wiiSetup();
 }
 
-void rcSetup()
-{
-  pinMode(rcPin1, INPUT);
-  pinMode(rcPin2, INPUT);
-  pinMode(rcPin3, INPUT);
-  pinMode(rcPin4, INPUT);
-  pinMode(rcPin5, INPUT);
+void pinsSetup(){
+    for(int i=0; i<5; i++)  pinMode(rcPin[i], INPUT);
+    pinMode(echoPin, INPUT);
+    pinMode(trigPin, OUTPUT);
 }
 
-void xBeeSetup(){
-  pinMode(xBeePin, INPUT);
+void wiiSetup(){
+    wiiThrottle.attach(wiiPin[0]);  wiiThrottle.writeMicroseconds(1000);
+    wiiYaw.attach(wiiPin[3]);       wiiYaw.writeMicroseconds(1500);  
+    wiiPitch.attach(wiiPin[2]);     wiiPitch.writeMicroseconds(1500);
+    wiiRoll.attach(wiiPin[1]);      wiiRoll.writeMicroseconds(1500);
+    wiiAux.attach(wiiPin[4]);       wiiAux.writeMicroseconds(0);
 }
 
-void multiWiiSetup(){
-  multiWiiThrottle.attach(multiWiiPin1);
-  multiWiiThrottle.writeMicroseconds(1000);
-  
-  multiWiiYaw.attach(multiWiiPin4);
-  multiWiiYaw.writeMicroseconds(1500);
-  
-  multiWiiPitch.attach(multiWiiPin3);
-  multiWiiPitch.writeMicroseconds(1500);
-  
-  multiWiiRoll.attach(multiWiiPin2);
-  multiWiiRoll.writeMicroseconds(1500);
-  
-  multiWiiAux.attach(multiWiiPin5);
-  multiWiiAux.writeMicroseconds(0);
+void PIDSetup(){
+    thrPID.SetOutputLimits(1050,1850);
+    thrPID.SetSampleTime(sampleTime);
 }
 
-
-
-void sensorSetup(){
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-  readSensor(&dist);
-  thrPID.SetOutputLimits(1250, 1750);
-  thrPID.SetSampleTime(sampleTime);
-  thrPID.SetMode(MANUAL);
-}
-
-void loop()
-{
-  updateInputs();
-  updateMode();
-  updateState();
-  switch (getMode()){
-    case GROUNDED:
-      groundedAct();
-      break;
-    case MANUALMODE:
-      ManualAct();
-      break;
-    default: //AUTO
-      autoAct();
-  }
-  Serial.println(getMode());
-}
-
-void updateMode()
-{
-  _oldMode = _mode;
-  
-  struct Inputs inputs = getInputs();
-  
-  if (_oldMode == GROUNDED){
-     if (AUX_THRESHOLD <= inputs.rcPin5){
-       _mode = MANUALMODE; 
-     } else {
-       _mode = GROUNDED;
-     }
-  }
-  else if (_oldMode == MANUALMODE){
-    if (inputs.rcPin5 < AUX_THRESHOLD && inputs.rcPin2 <= 1100){
-      _mode = GROUNDED;
-    } else if (inputs.hasXBee && inputs.xBee == '1') {
-      _mode = AUTO;
-    } 
-  } else { //AUTO
-    if (inputs.hasXBee && inputs.xBee == '0'){
-      _mode = MANUALMODE;
+void loop(){
+    wiiAux.writeMicroseconds(pulseIn(rcPin[4], HIGH, 40000));
+    wiiYaw.writeMicroseconds(pulseIn(rcPin[0], HIGH, 40000));
+    wiiPitch.writeMicroseconds(pulseIn(rcPin[2], HIGH, 40000));
+    wiiRoll.writeMicroseconds(pulseIn(rcPin[3], HIGH, 40000));
+    unsigned long now = millis();
+    dist = readSensor(true, dist);
+    
+    if(isAuto){
+        if(thrPID.Compute()){
+            wiiThrottle.writeMicroseconds(thrVal);
+        }
+        if((now - lastPrintTime) > serialPrintDelay){
+            Serial.print((int)dist);Serial.print("\t");
+            Serial.print((int)setDist);Serial.print("\t");
+            Serial.println((int)thrVal); 
+            lastPrintTime = now;
+        }
     }
-  }
-  
-  if(_oldMode != _mode){
-    _stateChanged = true;
-    switch(_mode){
-      case GROUNDED:
-        sendDisarm();
-        break;
-      case MANUALMODE:
-        sendArm();
-        break;
-      default: //AUTO
-        sendAuto();
+    else{
+      wiiThrottle.writeMicroseconds(pulseIn(rcPin[1], HIGH, 40000));
+      if((now - lastPrintTime) > serialPrintDelay){
+          Serial.println((int)dist);
+          lastPrintTime = now;
+      }
     }
-  }
 }
-
-int getMode(){
-  return _mode;
+    
+void serialEvent(){
+    char inChar = (char)Serial.read();
+    if(inChar == 'a' || inChar == 'A'){
+        isAuto = true;
+        thrVal = pulseIn(rcPin[1], HIGH);
+        dist = readSensor(true, dist);
+        setDist = dist;
+        thrPID.SetMode(AUTOMATIC);
+    } else if(inChar == 'm' || inChar == 'M'){
+        isAuto = false;
+        thrPID.SetMode(MANUAL);
+    } else Serial.print(inChar);
 }
-
-void updateState(){
-  
-}
-
-struct State getState(){
-  return _state;
-}
-
-void groundedAct(){
-  if(_stateChanged){
-    Serial.println("grounded...");
-    _stateChanged = false;
-  }
-}
-
-void ManualAct(){
-  if(_stateChanged){
-    Serial.println("MANUALMODE flying...");
-    _stateChanged = false;
-  }
-  
-  struct Inputs inputs = getInputs();
-  
-  multiWiiAux.writeMicroseconds(inputs.rcPin5);
-  multiWiiThrottle.writeMicroseconds(inputs.rcPin2);
-  multiWiiYaw.writeMicroseconds(inputs.rcPin1);
-  multiWiiPitch.writeMicroseconds(inputs.rcPin3);
-  multiWiiRoll.writeMicroseconds(inputs.rcPin4);
-}
-
-void autoAct(){
-  if(_stateChanged){
-    Serial.println("auto flying...");
-    _stateChanged = false;
-  }
-  struct Inputs inputs = getInputs();
-  
-  readSensor(&dist);
-  thrPID.Compute();
-  Serial.print("dist:");Serial.print(dist);Serial.print("\t");
-  Serial.print("setDist:");Serial.print(setDist);Serial.print("\t");
-  Serial.print("thrVal:");Serial.println(thrVal); 
-  delay(sampleTime);
-  multiWiiThrottle.writeMicroseconds(thrVal);
-  multiWiiYaw.writeMicroseconds(inputs.rcPin1);
-  multiWiiPitch.writeMicroseconds(inputs.rcPin3);
-  multiWiiRoll.writeMicroseconds(inputs.rcPin4);
-  
-}
-
-void updateInputs(){
-  _inputs.rcPin1 = pulseIn(rcPin1, HIGH);
-  _inputs.rcPin2 = pulseIn(rcPin2, HIGH);
-  _inputs.rcPin3 = pulseIn(rcPin3, HIGH);
-  _inputs.rcPin4 = pulseIn(rcPin4, HIGH);
-  _inputs.rcPin5 = pulseIn(rcPin5, HIGH);
-  
-  if (Serial.available() > 0){
-    _inputs.hasXBee = true;
-    _inputs.xBee = Serial.read();
-  }
-  else {
-    _inputs.hasXBee = false;
-  }  
-}
-
-struct Inputs getInputs(){
-  return _inputs;
-}
-
-void sendDisarm(){
-  Serial.println("disarming");
-  
-  struct Inputs inputs = getInputs();
-  multiWiiAux.writeMicroseconds(inputs.rcPin5);
-  multiWiiThrottle.writeMicroseconds(inputs.rcPin2);
-  thrPID.SetMode(MANUAL);
-}
-
-void sendArm(){
-  Serial.println("arming");
-
-  struct Inputs inputs = getInputs();
-  multiWiiAux.writeMicroseconds(inputs.rcPin5);
-  multiWiiThrottle.writeMicroseconds(inputs.rcPin2);
-  multiWiiYaw.writeMicroseconds(inputs.rcPin1);
-  multiWiiPitch.writeMicroseconds(inputs.rcPin3);
-  multiWiiRoll.writeMicroseconds(inputs.rcPin4);
-  
-  dist = setDist;
-  thrPID.SetMode(MANUAL);
-}
-
-void sendAuto(){
-  Serial.println("auto");
-  thrPID.SetMode(AUTOMATIC); 
-}
-
-long readSensor(double *dist){
-  double numReadings = 2.0;
-  long distSum = 0;
-  for(int i=0; i<numReadings; i++){
+    
+long readSensor(boolean filter, double dist){
+    digitalWrite(trigPin, LOW);     delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);    delayMicroseconds(5);
     digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin, LOW);
-    *dist = pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
-    *dist = smooth(pulseIn(echoPin, HIGH, 25000)/29/2, 0.6, *dist);
-    distSum += pulseIn(echoPin, HIGH, 25000) / 29 / 2;
-  }
-  Serial.print("dist:");Serial.println((double)*dist);
-  //*dist = constrain(distSum / numReadings, 0, 150);
+    if(filter)      return smooth(pulseIn(echoPin, HIGH, 25000)/29/2*10/9, 0.6, dist);
+    else            return pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
 }
-
 
 int smooth(int data, float filterVal, float smoothedVal){
+    filterVal = constrain(filterVal, 0, 1.0);
+    smoothedVal = (data * (1 - filterVal)) + (smoothedVal  *  filterVal);
 
-
-  if (filterVal > 1){      // check to make sure param's are within range
-    filterVal = .99;
-  }
-  else if (filterVal <= 0){
-    filterVal = 0;
-  }
-
-  smoothedVal = (data * (1 - filterVal)) + (smoothedVal  *  filterVal);
-
-  return (int)smoothedVal;
+    return (int)smoothedVal;
 }
-
-
-
