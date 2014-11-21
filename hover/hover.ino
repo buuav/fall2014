@@ -7,12 +7,13 @@ const int wiiPin[5] = {5, 6, 9, 10, 11};
 
 Servo wiiThrottle, wiiYaw, wiiPitch, wiiRoll, wiiAux;
 
-bool isAuto = false;
+bool isAuto = false; 
+const int AUX_LOW = 1600, AUX_HIGH = 1800;
 double dist, setDist, thrVal;
 const int sampleTime = 20, serialPrintDelay = 200;    // Sample time in ms
 unsigned long lastPrintTime = 0;
 
-PID thrPID(&dist, &thrVal, &setDist, 3.5, 1, 0.8, DIRECT);
+PID thrPID(&dist, &thrVal, &setDist, 3, 1.2, 0.8, DIRECT);
 
 void setup(){
     Serial.begin(9600);
@@ -32,7 +33,7 @@ void wiiSetup(){
     wiiYaw.attach(wiiPin[3]);       wiiYaw.writeMicroseconds(1500);  
     wiiPitch.attach(wiiPin[2]);     wiiPitch.writeMicroseconds(1500);
     wiiRoll.attach(wiiPin[1]);      wiiRoll.writeMicroseconds(1500);
-    wiiAux.attach(wiiPin[4]);       wiiAux.writeMicroseconds(0);
+    wiiAux.attach(wiiPin[4]);       wiiAux.writeMicroseconds(1850);
 }
 
 void PIDSetup(){
@@ -41,7 +42,22 @@ void PIDSetup(){
 }
 
 void loop(){
-    wiiAux.writeMicroseconds(pulseIn(rcPin[4], HIGH));
+    int aux = pulseIn(rcPin[4], HIGH);
+    if(aux>AUX_HIGH){
+      if(!isAuto){
+        isAuto = true;
+        thrVal = pulseIn(rcPin[1], HIGH);
+        dist = readSensor(true, dist);
+        setDist = dist;
+        thrPID.SetMode(AUTOMATIC);
+      }
+    } else if(aux<AUX_LOW) {
+      if(isAuto){
+        isAuto = false;
+        thrPID.SetMode(MANUAL);
+      }
+    }
+    wiiAux.writeMicroseconds(1850);
     wiiYaw.writeMicroseconds(pulseIn(rcPin[0], HIGH));
     wiiPitch.writeMicroseconds(pulseIn(rcPin[2], HIGH));
     wiiRoll.writeMicroseconds(pulseIn(rcPin[3], HIGH));
@@ -69,28 +85,21 @@ void loop(){
 }
     
 void serialEvent(){
-    char inChar = (char)Serial.read();
-    if(inChar == 'a' || inChar == 'A'){
-        isAuto = true;
-        thrVal = pulseIn(rcPin[1], HIGH);
-        dist = readSensor(true, dist);
-        setDist = dist;
-        thrPID.SetMode(AUTOMATIC);
-    } else if(inChar == 'm' || inChar == 'M'){
-        isAuto = false;
-        thrPID.SetMode(MANUAL);
-    } else Serial.print(inChar);
+    char inChar[2];
+    Serial.readBytes(inChar, Serial.available());
+    setDist = atoi(inChar);
 }
     
 long readSensor(boolean filter, double dist){
     digitalWrite(trigPin, LOW);     delayMicroseconds(2);
     digitalWrite(trigPin, HIGH);    delayMicroseconds(5);
     digitalWrite(trigPin, LOW);
-    if(filter)      return smooth(pulseIn(echoPin, HIGH, 25000)/29/2*10/9, 0.6, dist);
+    if(filter)      return smooth(pulseIn(echoPin, HIGH, 25000)/29/2*10/9, 0.8, dist);
     else            return pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
 }
 
 int smooth(int data, float filterVal, float smoothedVal){
+  // Higher filter values cause more filtering, slower response
     filterVal = constrain(filterVal, 0, 1.0);
     smoothedVal = (data * (1 - filterVal)) + (smoothedVal  *  filterVal);
 
