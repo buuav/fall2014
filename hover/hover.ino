@@ -12,7 +12,7 @@ double dist, setDist, thrVal;
 const int sampleTime = 20, serialPrintDelay = 200;    // Sample time in ms
 unsigned long lastPrintTime = 0;
 
-PID thrPID(&dist, &thrVal, &setDist, 4, 1, 1.5, DIRECT);
+PID thrPID(&dist, &thrVal, &setDist, 3.5, 1, 0.8, DIRECT);
 
 void setup(){
     Serial.begin(9600);
@@ -41,10 +41,10 @@ void PIDSetup(){
 }
 
 void loop(){
-    wiiAux.writeMicroseconds(pulseIn(rcPin[4], HIGH, 40000));
-    wiiYaw.writeMicroseconds(pulseIn(rcPin[0], HIGH, 40000));
-    wiiPitch.writeMicroseconds(pulseIn(rcPin[2], HIGH, 40000));
-    wiiRoll.writeMicroseconds(pulseIn(rcPin[3], HIGH, 40000));
+    wiiAux.writeMicroseconds(pulseIn(rcPin[4], HIGH));
+    wiiYaw.writeMicroseconds(pulseIn(rcPin[0], HIGH));
+    wiiPitch.writeMicroseconds(pulseIn(rcPin[2], HIGH));
+    wiiRoll.writeMicroseconds(pulseIn(rcPin[3], HIGH));
     unsigned long now = millis();
     dist = readSensor(true, dist);
     
@@ -60,7 +60,7 @@ void loop(){
         }
     }
     else{
-      wiiThrottle.writeMicroseconds(pulseIn(rcPin[1], HIGH, 40000));
+      wiiThrottle.writeMicroseconds(pulseIn(rcPin[1], HIGH));
       if((now - lastPrintTime) > serialPrintDelay){
           Serial.println((int)dist);
           lastPrintTime = now;
