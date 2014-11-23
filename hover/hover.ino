@@ -13,7 +13,7 @@ double dist, setDist, thrVal;
 const int sampleTime = 20, serialPrintDelay = 200;    // Sample time in ms
 unsigned long lastPrintTime = 0;
 
-PID thrPID(&dist, &thrVal, &setDist, 3, 1.2, 0.8, DIRECT);
+PID thrPID(&dist, &thrVal, &setDist, 3.5, 1, 0.8, DIRECT);
 
 void setup(){
     Serial.begin(9600);
@@ -94,7 +94,7 @@ long readSensor(boolean filter, double dist){
     digitalWrite(trigPin, LOW);     delayMicroseconds(2);
     digitalWrite(trigPin, HIGH);    delayMicroseconds(5);
     digitalWrite(trigPin, LOW);
-    if(filter)      return smooth(pulseIn(echoPin, HIGH, 25000)/29/2*10/9, 0.8, dist);
+    if(filter)      return smooth(pulseIn(echoPin, HIGH, 25000)/29/2*10/9, 0.6, dist);
     else            return pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
 }
 
