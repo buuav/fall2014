@@ -2,14 +2,14 @@
 #include <Servo.h>
 
 const double e = 2.7182;
-const int rcPin[5] = {A1, A2, A3, A4};  // {Yaw, Throttle, Pitch, Roll, Aux}
+const int rcPin[4] = {A1, A2, A3, A4};  // {Throttle, Pitch, Roll, Aux}
 const int echoPin[5] = {A5, 3, 4, 7, 8}, trigPin = 8; // {Down, front, right, rear, left} with common trigger
-const int wiiPin[5] = {5, 6, 9, 11};    // {Throttle, Roll, Pitch, Yaw, Aux}
+const int wiiPin[4] = {5, 6, 9, 11};    // {Throttle, Roll, Pitch, Aux}
 
 Servo wiiThrottle, wiiPitch, wiiRoll, wiiAux;
 
 double usReading[5];
-int rcReading[5];
+int rcReading[4];
 
 unsigned long now;
 const int samplingDelay[4] = {40, 40, 100, 200};   // Time delays in the order {Control, ultrasound, RC, print}
@@ -30,7 +30,7 @@ void setup(){
 }
 
 void pinsSetup(){
-    for(int i=0; i<5; i++)  pinMode(rcPin[i], INPUT);
+    for(int i=0; i<4; i++)  pinMode(rcPin[i], INPUT);
     for(int i=0; i<5; i++)  pinMode(echoPin[i], INPUT);
     pinMode(trigPin, OUTPUT);
 }
@@ -39,7 +39,7 @@ void wiiSetup(){
     wiiThrottle.attach(wiiPin[0]);
     wiiPitch.attach(wiiPin[2]);
     wiiRoll.attach(wiiPin[1]);
-    wiiAux.attach(wiiPin[4]);   wiiAux.writeMicroseconds(2000);     // Since this is permanently armed
+    wiiAux.attach(wiiPin[3]);   wiiAux.writeMicroseconds(2000);     // Since this is permanently armed
 }
 
 void PIDSetup(){
@@ -60,18 +60,18 @@ void loop(){
     
     // Update all RC inputs
     if((now - timeStamp[2]) > samplingDelay[2]){
-        for(int i=0; i<5; i++)
+        for(int i=0; i<4; i++)
             rcReading[i] = pulseIn(rcPin[i], HIGH);
         
         // Check if Aux has been flipped and change mode between manual and auto
-        if(rcReading[4]>AUX_THRESHOLD[1] && !isAuto){
+        if(rcReading[3]>AUX_THRESHOLD[1] && !isAuto){
             isAuto = true;
-            thrVal = rcReading[1]; 
+            thrVal = rcReading[0]; 
             dist = usReading[0];
             setDist = dist;
             // To eliminate jerk, match input and output of PID to the current values before switching it on
             thrPID.SetMode(AUTOMATIC);
-        } else if(rcReading[4]<AUX_THRESHOLD[0] && isAuto) {
+        } else if(rcReading[3]<AUX_THRESHOLD[0] && isAuto) {
             isAuto = false;
             thrPID.SetMode(MANUAL);
         }
@@ -83,12 +83,12 @@ void loop(){
         if(isAuto){
             thrPID.Compute();
             wiiThrottle.writeMicroseconds(thrVal);
-            wiiPitch.writeMicroseconds(rcReading[2] + 100*(pow(e, -0.07*usReading[3]) - pow(e, -0.07*usReading[1])));
-            wiiRoll.writeMicroseconds(rcReading[3] + 100*(pow(e, -0.07*usReading[4]) - pow(e, -0.07*usReading[2])));
+            wiiPitch.writeMicroseconds(rcReading[1] + 100*(pow(e, -0.07*usReading[3]) - pow(e, -0.07*usReading[1])));
+            wiiRoll.writeMicroseconds(rcReading[2] + 100*(pow(e, -0.07*usReading[4]) - pow(e, -0.07*usReading[2])));
         } else {
-            wiiThrottle.writeMicroseconds(rcReading[1]);
-            wiiRoll.writeMicroseconds(rcReading[3]);
-            wiiPitch.writeMicroseconds(rcReading[2]);
+            wiiThrottle.writeMicroseconds(rcReading[0]);
+            wiiRoll.writeMicroseconds(rcReading[2]);
+            wiiPitch.writeMicroseconds(rcReading[1]);
         }
         timeStamp[0] = now;
     }
