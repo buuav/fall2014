@@ -1,7 +1,12 @@
 #include <PID_v1.h>
 #include <Servo.h>
 
+const int AUX_THRESHOLD[2] = {1600, 1800};          // Low and high aux values with deadzone in between
+const double filterValue = 0.6;                     // Amount of smoothing in the ultrasonic sensor low pass filter
+const bool hoverOnly = true;
+const double maxVel = 10;                           // Maximum rate of ascent or descent in cm/s
 const double e = 2.7182;
+
 const int rcPin[4] = {A1, A2, A3, A4};  // {Throttle, Pitch, Roll, Aux}
 const int echoPin[5] = {A5, 3, 4, 7, 8}, trigPin = 8; // {Down, front, right, rear, left} with common trigger
 const int wiiPin[4] = {5, 6, 9, 11};    // {Throttle, Roll, Pitch, Aux}
@@ -12,15 +17,13 @@ double usReading[5];
 int rcReading[4];
 
 unsigned long now;
-const int samplingDelay[4] = {40, 40, 100, 200};   // Time delays in the order {Control, ultrasound, RC, print}
+const int samplingDelay[4] = {20, 20, 100, 200};   // Time delays in the order {Control, ultrasound, RC, print}
 unsigned long timeStamp[4];                         // Time since last occurance in same order as above.
 
 bool isAuto = false; 
-const int AUX_THRESHOLD[2] = {1600, 1800};          // Low and high aux values with deadzone in between
-const double filterValue = 0.6;                     // Amount of smoothing in the ultrasonic sensor low pass filter
-double dist, setDist, thrVal;                       // PID input, setpoint and output variables
+double vel, setDist, setVel, thrVal;                       // PID input, setpoints and output variables
 
-PID thrPID(&dist, &thrVal, &setDist, 3.5, 1, 0.8, DIRECT);
+PID thrPID(&vel, &thrVal, &setVel, 1.5, 0.5, 0.2, DIRECT);
 
 void setup(){
     Serial.begin(9600);
@@ -52,9 +55,13 @@ void loop(){
     
     // Update all ultrasound readings
     if((now - timeStamp[1]) > samplingDelay[1]){
-        for(int i=0; i<5; i++)
-            usReading[i] = smooth(readSensor(trigPin, echoPin[i]), filterValue, usReading[i]);
-        if(isAuto)  dist = usReading[0];
+        vel = usReading[0];
+        usReading[0] = smooth(readSensor(trigPin, echoPin[0]), filterValue, usReading[0]);
+        vel = (usReading[0] - vel)/samplingDelay[1];
+        if(isAuto) setVel = 2*maxVel * (1/(1+pow(e, 0.2*(usReading[0] - setDist))) - 0.5);
+        if(!hoverOnly)
+            for(int i=1; i<5; i++)
+                usReading[i] = smooth(readSensor(trigPin, echoPin[i]), filterValue, usReading[i]);
         timeStamp[1] = now;
     }
     
@@ -67,8 +74,8 @@ void loop(){
         if(rcReading[3]>AUX_THRESHOLD[1] && !isAuto){
             isAuto = true;
             thrVal = rcReading[0]; 
-            dist = usReading[0];
-            setDist = dist;
+            setDist = usReading[0];
+            setVel = 0;
             // To eliminate jerk, match input and output of PID to the current values before switching it on
             thrPID.SetMode(AUTOMATIC);
         } else if(rcReading[3]<AUX_THRESHOLD[0] && isAuto) {
@@ -83,8 +90,13 @@ void loop(){
         if(isAuto){
             thrPID.Compute();
             wiiThrottle.writeMicroseconds(thrVal);
-            wiiPitch.writeMicroseconds(rcReading[1] + 100*(pow(e, -0.07*usReading[3]) - pow(e, -0.07*usReading[1])));
-            wiiRoll.writeMicroseconds(rcReading[2] + 100*(pow(e, -0.07*usReading[4]) - pow(e, -0.07*usReading[2])));
+            if(hoverOnly){
+                wiiPitch.writeMicroseconds(rcReading[1]);
+                wiiRoll.writeMicroseconds(rcReading[2]);
+            } else {
+                wiiPitch.writeMicroseconds(rcReading[1] + 100*(pow(e, -0.07*usReading[3]) - pow(e, -0.07*usReading[1])));
+                wiiRoll.writeMicroseconds(rcReading[2] + 100*(pow(e, -0.07*usReading[4]) - pow(e, -0.07*usReading[2])));
+            }
         } else {
             wiiThrottle.writeMicroseconds(rcReading[0]);
             wiiRoll.writeMicroseconds(rcReading[2]);
@@ -94,13 +106,13 @@ void loop(){
     }
     
     // Print output on serial line
-    if((now - timeStamp[2]) > samplingDelay[2]){
+    if((now - timeStamp[3]) > samplingDelay[3]){
         if(isAuto){
-            Serial.print((int)dist);        Serial.print("\t");
-            Serial.print((int)setDist);     Serial.print("\t");
+            Serial.print((int)usReading[0]);        Serial.print("\t");
+            Serial.print((int)setDist);             Serial.print("\t");
             Serial.println((int)thrVal); 
-        } else   Serial.println((int)dist);
-    timeStamp[2] = now;
+        } else   Serial.println((int)usReading[0]);
+    timeStamp[3] = now;
     }
 }
     
@@ -114,7 +126,7 @@ double readSensor(int trigPin, int echoPin){
     digitalWrite(trigPin, LOW);     delayMicroseconds(2);
     digitalWrite(trigPin, HIGH);    delayMicroseconds(5);
     digitalWrite(trigPin, LOW);
-    return pulseIn(echoPin, HIGH, 25000)/(29/2)*10/9;
+    return pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
 }
 
 double smooth(double data, double filterVal, double smoothedVal){
