@@ -89,7 +89,7 @@ void loop(){
             thrPID.Compute();
             wiiThrottle.writeMicroseconds(thrVal);
             wiiRoll.writeMicroseconds(rcReading[2]);
-            wiiPitch.writeMicroseconds(rcReading[1] - 100*(pow(e, -0.07*usReading[1])));
+            wiiPitch.writeMicroseconds(rcReading[1] + 100*(pow(e, -0.07*usReading[1])));
         } else {
             wiiThrottle.writeMicroseconds(rcReading[0]);
             wiiRoll.writeMicroseconds(rcReading[2]);
@@ -104,7 +104,7 @@ void loop(){
             Serial.println((int)usReading[1]);      //  Serial.print("\t");
 //            Serial.print((int)setDist);             Serial.print("\t");
 //            Serial.println((int)thrVal); 
-        } else   Serial.println((int)usReading[0]);
+        } else   Serial.println((int)usReading[1]);
     timeStamp[3] = now;
     }
 }

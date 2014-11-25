@@ -4,7 +4,6 @@
 const int AUX_THRESHOLD[2] = {1600, 1800};          // Low and high aux values with deadzone in between
 const double filterValue = 0.6;                     // Amount of smoothing in the ultrasonic sensor low pass filter
 const bool hoverOnly = true;
-const double maxVel = 10;                           // Maximum rate of ascent or descent in cm/s
 const double e = 2.7182;
 
 const int rcPin[4] = {A1, A2, A3, A4};  // {Throttle, Pitch, Roll, Aux}
