@@ -3,12 +3,10 @@
 
 const int AUX_THRESHOLD[2] = {1600, 1800};          // Low and high aux values with deadzone in between
 const double filterValue = 0.6;                     // Amount of smoothing in the ultrasonic sensor low pass filter
-const bool hoverOnly = true;
-const double maxVel = 10;                           // Maximum rate of ascent or descent in cm/s
 const double e = 2.7182;
 
 const int rcPin[4] = {A1, A2, A3, A4};  // {Throttle, Pitch, Roll, Aux}
-const int echoPin[5] = {A5, 3, 4, 7, 8}, trigPin = 8; // {Down, front, right, rear, left} with common trigger
+const int echoPin[5] = {A5, 3}, trigPin[2] = {8, 10}; // {Down, front, right, rear, left} with common trigger
 const int wiiPin[4] = {5, 6, 9, 11};    // {Throttle, Roll, Pitch, Aux}
 
 Servo wiiThrottle, wiiPitch, wiiRoll, wiiAux;
@@ -35,8 +33,11 @@ void setup(){
 
 void pinsSetup(){
     for(int i=0; i<4; i++)  pinMode(rcPin[i], INPUT);
-    for(int i=0; i<5; i++)  pinMode(echoPin[i], INPUT);
-    pinMode(trigPin, OUTPUT);
+    for(int i=0; i<2; i++){
+      pinMode(echoPin[i], INPUT);
+      pinMode(trigPin[i], OUTPUT);
+    }
+    pinMode(4, OUTPUT);  digitalWrite(4, HIGH);
 }
 
 void wiiSetup(){
@@ -56,11 +57,9 @@ void loop(){
     
     // Update all ultrasound readings
     if((now - timeStamp[1]) > samplingDelay[1]){
-        usReading[0] = smooth(readSensor(trigPin, echoPin[0]), filterValue, usReading[0]);
+        usReading[0] = smooth(readSensor(trigPin[0], echoPin[0]), filterValue, usReading[0]);
         if(isAuto) dist = usReading[0];
-        if(!hoverOnly)
-            for(int i=1; i<5; i++)
-                usReading[i] = smooth(readSensor(trigPin, echoPin[i]), filterValue, usReading[i]);
+        usReading[1] = smooth(readSensor(trigPin[1], echoPin[1]), filterValue, usReading[1]);
         timeStamp[1] = now;
     }
     
@@ -89,13 +88,8 @@ void loop(){
         if(isAuto){
             thrPID.Compute();
             wiiThrottle.writeMicroseconds(thrVal);
-            if(hoverOnly){
-                wiiPitch.writeMicroseconds(rcReading[1]);
-                wiiRoll.writeMicroseconds(rcReading[2]);
-            } else {
-                wiiPitch.writeMicroseconds(rcReading[1] + 100*(pow(e, -0.07*usReading[3]) - pow(e, -0.07*usReading[1])));
-                wiiRoll.writeMicroseconds(rcReading[2] + 100*(pow(e, -0.07*usReading[4]) - pow(e, -0.07*usReading[2])));
-            }
+            wiiRoll.writeMicroseconds(rcReading[2]);
+            wiiPitch.writeMicroseconds(rcReading[1] - 100*(pow(e, -0.07*usReading[1])));
         } else {
             wiiThrottle.writeMicroseconds(rcReading[0]);
             wiiRoll.writeMicroseconds(rcReading[2]);
@@ -107,9 +101,9 @@ void loop(){
     // Print output on serial line
     if((now - timeStamp[3]) > samplingDelay[3]){
         if(isAuto){
-            Serial.print((int)usReading[0]);        Serial.print("\t");
-            Serial.print((int)setDist);             Serial.print("\t");
-            Serial.println((int)thrVal); 
+            Serial.println((int)usReading[1]);      //  Serial.print("\t");
+//            Serial.print((int)setDist);             Serial.print("\t");
+//            Serial.println((int)thrVal); 
         } else   Serial.println((int)usReading[0]);
     timeStamp[3] = now;
     }
