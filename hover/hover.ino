@@ -6,14 +6,14 @@ const int echoPin = A5, trigPin = 8;
 const int wiiPin[5] = {5, 6, 9, 10, 11};
 
 Servo wiiThrottle, wiiYaw, wiiPitch, wiiRoll, wiiAux;
-
+double kP = 3.5, kI = 1, kD = 0.8;
 bool isAuto = false; 
 const int AUX_LOW = 1600, AUX_HIGH = 1800;
 double dist, setDist, thrVal;
 const int sampleTime = 20, serialPrintDelay = 200;    // Sample time in ms
 unsigned long lastPrintTime = 0;
 
-PID thrPID(&dist, &thrVal, &setDist, 3.5, 1, 0.8, DIRECT);
+PID thrPID(&dist, &thrVal, &setDist, kP, kI, kD, DIRECT);
 
 void setup(){
     Serial.begin(9600);
@@ -85,9 +85,19 @@ void loop(){
 }
     
 void serialEvent(){
-    char inChar[2];
+    char inChar[4];
     Serial.readBytes(inChar, Serial.available());
-    setDist = atoi(inChar);
+    char valChar[3];
+    for(int i=0; i<3; i++)  valChar[i] = inChar[i+1];
+    if(inChar[0] == 'p')  kP = atof(valChar);
+    else if(inChar[0] == 'i')  kI = atof(valChar);
+    else if(inChar[0] == 'd')  kD = atof(valChar);
+    else if(inChar[0] == 'a')  setDist = atof(valChar);
+    thrPID.SetTunings(kP, kI, kD);
+    Serial.print("Tunings:");  Serial.print(kP);
+    Serial.print("\t");  Serial.print(kI);
+    Serial.print("\t");  Serial.print(kD);
+    Serial.print("\t");  Serial.println(setDist);
 }
     
 long readSensor(boolean filter, double dist){

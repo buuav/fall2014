@@ -15,6 +15,7 @@ Servo wiiThrottle, wiiPitch, wiiRoll, wiiAux;
 
 double usReading[5];
 int rcReading[4];
+int kP = 3.5, kI = 1, kD = 0.8;
 
 unsigned long now;
 const int samplingDelay[4] = {20, 20, 100, 200};   // Time delays in the order {Control, ultrasound, RC, print}
@@ -23,7 +24,7 @@ unsigned long timeStamp[4];                         // Time since last occurance
 bool isAuto = false; 
 double vel, setDist, setVel, thrVal;                       // PID input, setpoints and output variables
 
-PID thrPID(&vel, &thrVal, &setVel, 1.5, 0.5, 0.2, DIRECT);
+PID thrPID(&vel, &thrVal, &setVel, kP, kI, kD, DIRECT);
 
 void setup(){
     Serial.begin(9600);
@@ -117,9 +118,19 @@ void loop(){
 }
     
 void serialEvent(){
-    char inChar[2];
+    char inChar[4];
     Serial.readBytes(inChar, Serial.available());
-    setDist = atoi(inChar);
+    char valChar[3];
+    for(int i=0; i<3; i++)  valChar[i] = inChar[i+1];
+    if(inChar[0] == 'p')  kP = atof(valChar);
+    else if(inChar[0] == 'i')  kI = atof(valChar);
+    else if(inChar[0] == 'd')  kD = atof(valChar);
+    else if(inChar[0] == 'a')  setDist = atof(valChar);
+    thrPID.SetTunings(kP, kI, kD);
+    Serial.print("Tunings:");  Serial.print(kP);
+    Serial.print("\t");  Serial.print(kI);
+    Serial.print("\t");  Serial.print(kD);
+    Serial.print("\t");  Serial.println(setDist);
 }
                 
 double readSensor(int trigPin, int echoPin){
