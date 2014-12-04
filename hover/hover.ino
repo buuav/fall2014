@@ -17,7 +17,7 @@ int rcReading[4];
 int kP = 3.5, kI = 1, kD = 0.8;
 
 unsigned long now;
-const int samplingDelay[4] = {20, 20, 100, 200};   // Time delays in the order {Control, ultrasound, RC, print}
+const int samplingDelay[4] = {30, 30, 100, 200};   // Time delays in the order {Control, ultrasound, RC, print}
 unsigned long timeStamp[4];                         // Time since last occurance in same order as above.
 
 bool isAuto = false; 
@@ -132,7 +132,7 @@ void serialEvent(){
                 
 double readSensor(int trigPin, int echoPin){
     digitalWrite(trigPin, LOW);     delayMicroseconds(2);
-    digitalWrite(trigPin, HIGH);    delayMicroseconds(5);
+    digitalWrite(trigPin, HIGH);    delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
     return pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
 }

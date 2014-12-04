@@ -1,22 +1,29 @@
 #include <PID_v1.h>
 #include <Servo.h>
+#include <NewPing.h>
 
 const int AUX_THRESHOLD[2] = {1600, 1800};          // Low and high aux values with deadzone in between
 const double filterValue = 0.6;                     // Amount of smoothing in the ultrasonic sensor low pass filter
 const double e = 2.7182;
 
 const int rcPin[4] = {A1, A2, A3, A4};  // {Throttle, Pitch, Roll, Aux}
-const int echoPin[5] = {A5, 3}, trigPin[2] = {8, 10}; // {Down, front, right, rear, left} with common trigger
 const int wiiPin[4] = {5, 6, 9, 11};    // {Throttle, Roll, Pitch, Aux}
 
 Servo wiiThrottle, wiiPitch, wiiRoll, wiiAux;
+NewPing sonar[2] = {
+  NewPing(8, A5, 200),
+  NewPing(10, 3, 200)
+};
+uint32_t pingTimer[2];
+uint8_t cm[2];
+uint8_t currentSensor = 0;
 
-double usReading[5];
 int rcReading[4];
+int avoidPitch = 0;
 int kP = 3.5, kI = 1, kD = 0.8;
 
 unsigned long now;
-const int samplingDelay[4] = {20, 20, 100, 200};   // Time delays in the order {Control, ultrasound, RC, print}
+const int samplingDelay[4] = {30, 30, 100, 200};   // Time delays in the order {Control, ultrasound, RC, print}
 unsigned long timeStamp[4];                         // Time since last occurance in same order as above.
 
 bool isAuto = false; 
@@ -29,14 +36,12 @@ void setup(){
     pinsSetup();
     PIDSetup();
     wiiSetup();
+    pingTimer[1] = millis()+100;
+    pingTimer[2] = pingTimer[1] + 30;
 }
 
 void pinsSetup(){
     for(int i=0; i<4; i++)  pinMode(rcPin[i], INPUT);
-    for(int i=0; i<2; i++){
-      pinMode(echoPin[i], INPUT);
-      pinMode(trigPin[i], OUTPUT);
-    }
     pinMode(4, OUTPUT);  digitalWrite(4, HIGH);
 }
 
@@ -56,12 +61,16 @@ void loop(){
     now = millis();
     
     // Update all ultrasound readings
-    if((now - timeStamp[1]) > samplingDelay[1]){
-        usReading[0] = smooth(readSensor(trigPin[0], echoPin[0]), filterValue, usReading[0]);
-        if(isAuto) dist = usReading[0];
-        usReading[1] = smooth(readSensor(trigPin[1], echoPin[1]), filterValue, usReading[1]);
-        timeStamp[1] = now;
+    for(int i=0; i<2; i++){
+      if(now >= pingTimer[i]){
+        pingTimer[i] += 60;
+        sonar[currentSensor].timer_stop();          // Make sure previous timer is canceled before starting a new ping (insurance).
+        currentSensor = i;         // Sensor being accessed.
+        if(currentSensor==1)  cm[currentSensor] = 200;
+        sonar[currentSensor].ping_timer(echoCheck); // Do the ping (processing continues, interrupt will call echoCheck to look for echo).
+      }
     }
+        
     
     // Update all RC inputs
     if((now - timeStamp[2]) > samplingDelay[2]){
@@ -72,7 +81,7 @@ void loop(){
         if(rcReading[3]>AUX_THRESHOLD[1] && !isAuto){
             isAuto = true;
             thrVal = rcReading[0]; 
-            dist = usReading[0];
+            dist = cm[0];
             setDist = dist;
             // To eliminate jerk, match input and output of PID to the current values before switching it on
             thrPID.SetMode(AUTOMATIC);
@@ -89,7 +98,8 @@ void loop(){
             thrPID.Compute();
             wiiThrottle.writeMicroseconds(thrVal);
             wiiRoll.writeMicroseconds(rcReading[2]);
-            wiiPitch.writeMicroseconds(rcReading[1] + 100*(pow(e, -0.07*usReading[1])));
+            avoidPitch =100*(pow(e, -0.025*cm[1]));
+            wiiPitch.writeMicroseconds(rcReading[1] + avoidPitch);
         } else {
             wiiThrottle.writeMicroseconds(rcReading[0]);
             wiiRoll.writeMicroseconds(rcReading[2]);
@@ -101,28 +111,40 @@ void loop(){
     // Print output on serial line
     if((now - timeStamp[3]) > samplingDelay[3]){
         if(isAuto){
-            Serial.println((int)usReading[1]);      //  Serial.print("\t");
-//            Serial.print((int)setDist);             Serial.print("\t");
-//            Serial.println((int)thrVal); 
-        } else   Serial.println((int)usReading[1]);
+            Serial.print((int)cm[0]);          Serial.print("\t");
+            Serial.print((int)setDist);               Serial.print("\t");
+            Serial.print((int)thrVal);                Serial.print("\t\t"); 
+            Serial.print((int)cm[1]);          Serial.print("\t");
+            Serial.println((int)avoidPitch);
+        } else {
+            Serial.print((int)cm[0]);          Serial.print("\t");
+            Serial.println((int)cm[1]);
+        }
     timeStamp[3] = now;
     }
 }
     
-void serialEvent(){
-    char inChar[4];
-    Serial.readBytes(inChar, Serial.available());
-    char valChar[3];
-    for(int i=0; i<3; i++)  valChar[i] = inChar[i+1];
-    if(inChar[0] == 'p')  kP = atof(valChar);
-    else if(inChar[0] == 'i')  kI = atof(valChar);
-    else if(inChar[0] == 'd')  kD = atof(valChar);
-    else if(inChar[0] == 'a')  setDist = atof(valChar);
-    thrPID.SetTunings(kP, kI, kD);
-    Serial.print("Tunings:");  Serial.print(kP);
-    Serial.print("\t");  Serial.print(kI);
-    Serial.print("\t");  Serial.print(kD);
-    Serial.print("\t");  Serial.println(setDist);
+//void serialEvent(){
+//    char inChar[4];
+//    Serial.readBytes(inChar, Serial.available());
+//    char valChar[3];
+//    for(int i=0; i<3; i++)  valChar[i] = inChar[i+1];
+//    if(inChar[0] == 'p')  kP = atof(valChar);
+//    else if(inChar[0] == 'i')  kI = atof(valChar);
+//    else if(inChar[0] == 'd')  kD = atof(valChar);
+//    else if(inChar[0] == 'a')  setDist = atof(valChar);
+//    thrPID.SetTunings(kP, kI, kD);
+//    Serial.print("Tunings:");  Serial.print(kP);
+//    Serial.print("\t");  Serial.print(kI);
+//    Serial.print("\t");  Serial.print(kD);
+//    Serial.print("\t");  Serial.println(setDist);
+//}
+
+void echoCheck() { // If ping received, set the sensor distance to array.
+  if (sonar[currentSensor].check_timer()){
+    cm[currentSensor] = sonar[currentSensor].ping_result / US_ROUNDTRIP_CM;
+    if(currentSensor == 0)  dist = cm[currentSensor];
+  }
 }
                 
 double readSensor(int trigPin, int echoPin){
