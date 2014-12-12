@@ -4,13 +4,13 @@
 const int AUX_THRESHOLD[2] = {
   1600, 1800};          // Low and high aux values with deadzone in between
 const double filterValue = 0.6;                     // Amount of smoothing in the ultrasonic sensor low pass filter
+const bool hoverOnly = false;
 const double e = 2.7182;
 
 const int rcPin[4] = {
   A0, A1, A2, A3};  // {Throttle-Yellow, Pitch-Black, Roll-Green, Aux-Orange} {Yaw-Orange is direct from RC to Multiwii}
 const int echoPin[5] = {
   2, 3, 4, 5, 6}
-, trigPin = 8; // {Down-Green, front, right, rear, left} with common trigger-yellow
 , trigPin[2] = {7, 8}; // {Down-Green, front, right, rear, left} with common trigger-yellow
 const int wiiPin[4] = {
   10, 11, 12, 13};    // {Throttle-Yellow, Pitch-Black, Roll-Green, Aux-Orange}
@@ -29,22 +29,18 @@ unsigned long timeStamp[4];                         // Time since last occurance
 bool isAuto = false; 
 double dist, setDist, thrVal;                       // PID input, setpoints and output variables
 
-PID thrPID(&dist, &thrVal, &setDist, 3.5, 1, 0.8, DIRECT);
 PID thrPID(&dist, &thrVal, &setDist, 3.1, 1, 0.6, DIRECT);
 
 void setup(){
   Serial.begin(9600);
   pinsSetup();
-  PIDSetup();
+  PIDSetup();   
   wiiSetup();
 }
-
+	
 void pinsSetup(){
   for(int i=0; i<4; i++)  pinMode(rcPin[i], INPUT);
   for(int i=0; i<5; i++)  pinMode(echoPin[i], INPUT);
-  pinMode(trigPin, OUTPUT);
-  pinMode(9, OUTPUT);     
-  digitalWrite(9, HIGH);          // This pin provides power to the uS sensor
   for(int i=0; i<2; i++)	pinMode(trigPin[i], OUTPUT);
   pinMode(A5, OUTPUT);     
   digitalWrite(A5, HIGH);				// This pin provides power to the RC receiver
@@ -70,12 +66,29 @@ void loop(){
 
   // Update all ultrasound readings
   if((now - timeStamp[1]) > samplingDelay[1]){
-    unsigned int temp = readSensor(trigPin, echoPin[0]);
     unsigned int temp = readSensor(trigPin[1], echoPin[0]);
     if(abs(temp - usReading[0]) < 5)  usReading[0] = smooth(temp, filterValue, usReading[0]);
     else if(temp>usReading[0])  usReading[0] += 5;
     else usReading[0] -= 5;
     if(isAuto) dist = usReading[0];
+    if(!hoverOnly){
+      digitalWrite(trigPin[0], LOW);		delayMicroseconds(2);
+			digitalWrite(trigPin[0], HIGH);		delayMicroseconds(10);
+			digitalWrite(trigPin[0], LOW);
+      uint32_t endTime[4];
+			uint8_t lastState = (PIND>>1)&B00001111;
+			uint32_t timeOut = micros() + 5800;
+			for(uint8_t i=0; i<4; i++)	endTime[i] = timeOut;
+			uint32_t startTime = micros();
+			while(micros()<timeOut){
+				for(uint8_t i=0; i<4; i++)
+					if((((PIND>>1)&B00001111)^lastState)&(1<<i) & lastState)
+						endTime[i] = micros();
+				lastState = (PIND>>1)&B00001111;
+			}
+			for(int i=0; i<4; i++)
+					usReading[i+1] = (endTime[i]-startTime) / 58;
+		}
     timeStamp[1] = now;
   }
 
@@ -124,10 +137,6 @@ void loop(){
 
   // Print output on serial line
   if((now - timeStamp[3]) > samplingDelay[3]){
-    if(isAuto){
-      Serial.print((int)usReading[0]);        
-      Serial.print("\t");
-      Serial.print((int)setDist);             
 //    if(isAuto){
 //      Serial.print((int)usReading[0]);        
 //      Serial.print("\t");
@@ -139,9 +148,6 @@ void loop(){
     for(int i=0; i<5; i++){
       Serial.print((int)usReading[i]);
       Serial.print("\t");
-      Serial.println((int)thrVal); 
-    } 
-    else   Serial.println((int)usReading[0]);
     }
     Serial.println(""); 
     timeStamp[3] = now;
