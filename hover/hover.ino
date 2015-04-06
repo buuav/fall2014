@@ -83,23 +83,21 @@ void loop(){
 
     // Print output on serial line
     if((now - timeStamp[3]) > samplingDelay[3]){
-        if(isAuto){
-            Serial.print((int)dist);
-            Serial.print("\t");
-            Serial.print((int)setDist);
-            Serial.print("\t");
-            Serial.println((int)thrVal);
-        }
-        else   Serial.println((int)dist);
+        Serial.print((int)dist);
+        Serial.print("\t");
+        Serial.print((int)setDist);
+        Serial.print("\t");
+        Serial.print((int)thrVal);
+        Serial.print("\t");
+        if(isAuto)  Serial.println("AUTO");
+        else        Serial.println("MANUAL");
     timeStamp[3] = now;
     }
 }
     
 double readSensor(int trigPin, int echoPin){
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);     delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);    delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
     return pulseIn(echoPin, HIGH, 25000)/29/2*10/9;
 }
